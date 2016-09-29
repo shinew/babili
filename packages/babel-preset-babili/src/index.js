@@ -1,4 +1,5 @@
 const isPlainObject = require("lodash.isplainobject");
+const OptionsManager = require("./options-manager");
 
 // the flat plugin map
 // This is to prevent dynamic requires - require('babel-plugin-' + name);
@@ -28,101 +29,45 @@ module.exports = preset;
 function preset(_opts = {}) {
   const opts = isPlainObject(_opts) ? _opts : {};
 
-  const plugins = [];
+  // Proxies are options passed to multiple plugins
+  const proxies = {
+    keepFnames: ["mangle", "deadcode"]
+  };
 
-  const delegations = invertMap({
-    keepFnames: [ "mangle", "deadcode" ],
-  });
+  const plugins = new OptionsManager(proxies, opts)
+    .addOption("evaluate", PLUGINS["minify-constant-folding"], true)
+    .addOption("deadcode", PLUGINS["minify-dead-code-elimination"], true)
 
-  option(opts, "evaluate", "minify-constant-folding", true);
-  option(opts, "deadcode", "minify-dead-code-elimination", true);
+    .addGroup("unsafe", (optionsManager) => {
+      optionsManager
+        .addOption("flip", PLUGINS["minify-flip-comparisons"], true)
+        .addOption("simplify", PLUGINS["transform-simplify-comparison-operators"], true)
+        .addOption("guards", PLUGINS["minify-guarded-expressions"], true)
+        .addOption("typeConstructors", PLUGINS["minify-type-constructors"], true);
+    })
 
-  optionGroup(opts, "unsafe", (opts) => [
-    option(opts, "flip", "minify-flip-comparisons", true),
-    option(opts, "simplify", "transform-simplify-comparison-operators", true),
-    option(opts, "guards", "minify-guarded-expressions", true),
-    option(opts, "typeConstructors", "minify-type-constructors", true)
-  ]);
+    .addOption("infinity", PLUGINS["minify-infinity"], true)
+    .addOption("mangle", PLUGINS["minify-mangle-names"], true)
+    .addOption("replace", PLUGINS["minify-replace"], true)
+    .addOption("simplify", PLUGINS["minify-simplify"], true)
 
-  option(opts, "infinity", "minify-infinity", true);
-  option(opts, "mangle", "minify-mangle-names", true);
-  option(opts, "replace", "minify-replace", true);
-  option(opts, "simplify", "minify-simplify", true);
+    .addGroup("properties", (optionsManager) => {
+      optionsManager
+        .addOption("memberExpressions", PLUGINS["transform-member-expression-literals"], true)
+        .addOption("propertyLiterals", PLUGINS["transform-property-literals"], true);
+    })
 
-  optionGroup(opts, "properties", (opts) => [
-    option(opts, "memberExpressions", "transform-member-expression-literals", true),
-    option(opts, "propertyLiterals", "transform-property-literals", true)
-  ]);
+    .addOption("mergeVars", PLUGINS["transform-merge-sibling-variables"], true)
+    .addOption("booleans", PLUGINS["transform-minify-booleans"], true)
 
-  option(opts, "mergeVars", "transform-merge-sibling-variables", true);
-  option(opts, "booleans", "transform-minify-booleans", true);
+    .addOption("undefinedToVoid", PLUGINS["transform-undefined-to-void"], true)
+    .addOption("removeDebugger", PLUGINS["transform-remove-debugger"], false)
+    .addOption("removeConsole", PLUGINS["transform-remove-console"], false)
 
-  option(opts, "undefinedToVoid", "transform-undefined-to-void", true);
-  option(opts, "removeDebugger", "transform-remove-debugger", false);
-  option(opts, "removeConsole", "transform-remove-console", false);
+    .result;
 
   return {
     minified: true,
     plugins,
   };
-
-  function option(opts, name, plugin, defaultValue) {
-    if (typeof opts === "undefined") {
-      if (defaultValue) {
-        plugins.push(getPlugin(name, plugin));
-      }
-    } else if (isPlainObject(opts) && hop(opts, name)) {
-      if (isPlainObject(opts[name])) {
-        plugins.push(getPlugin(name, plugin, opts[name]));
-      } else if (opts[name]) {
-        plugins.push(getPlugin(name, plugin));
-      }
-    } else if (defaultValue) {
-      plugins.push(getPlugin(name, plugin));
-    }
-  }
-
-  function optionGroup(opts, name, fn) {
-    if (isPlainObject(opts) && (!hop(opts, name) || opts[name])) {
-      fn(opts[name]);
-    }
-  }
-
-  function getPlugin(name, plugin, pluginOpts) {
-    const pluginFn = PLUGINS[plugin];
-    if (hop(delegations, name)) {
-      const delegatedOpts = {};
-      delegations[name].forEach((d) => {
-        if (hop(opts, d)) {
-          Object.assign(delegatedOpts, {
-            [d]: opts[d]
-          });
-        }
-      });
-      if (isPlainObject(pluginOpts)) {
-        Object.assign(delegatedOpts, pluginOpts);
-      }
-      if (Object.keys(delegatedOpts).length > 0) {
-        return [pluginFn, delegatedOpts];
-      }
-    }
-    return pluginFn;
-  }
-}
-
-function invertMap(map) {
-  const inverted = {};
-  Object.keys(map).forEach((key) => {
-    map[key].forEach((option) => {
-      if (!hop(inverted, option)) {
-        inverted[option] = [];
-      }
-      inverted[option].push(key);
-    });
-  });
-  return inverted;
-}
-
-function hop(o, k) {
-  return Object.prototype.hasOwnProperty.call(o, k);
 }

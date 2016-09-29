@@ -21,8 +21,7 @@ const mocks = [
 ];
 
 mocks.forEach((mockName) => {
-  // it's called mockName for jest workaround
-  // specifically babel-jest-plugin
+  // it's called mockName for jest(babel-jest-plugin) workaround
   jest.mock(mockName, () => mockName);
 });
 
